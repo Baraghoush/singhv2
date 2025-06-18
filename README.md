@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # JSingh Law Clone
 
 This is a React + Tailwind CSS starter site inspired by jsinghlaw.com.
@@ -13,3 +14,7 @@ This is a React + Tailwind CSS starter site inspired by jsinghlaw.com.
 - Update `src/App.jsx` for content
 - Configure your Formspree endpoint in the contact form
 - Edit colors, text, or structure as needed
+=======
+# singh
+SingV2
+>>>>>>> 4553d32d475f7d90586fe21b202d660c28a815d3

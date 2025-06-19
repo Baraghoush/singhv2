@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import emailjs from '@emailjs/browser';
-import { supabase, updateContacts } from './supabaseClient';
+import { supabase, updateContacts, testSupabaseConnection } from './supabaseClient';
 
 // Placeholder config. Replace with your actual config or import from a config file.
 const config = {
@@ -23,6 +23,8 @@ const VoiceRecorder = () => {
   const [permissionStatus, setPermissionStatus] = useState('');
   const [showTranslate, setShowTranslate] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [supabaseStatus, setSupabaseStatus] = useState('unknown');
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   // Refs
   const mediaRecorderRef = useRef(null);
@@ -39,6 +41,36 @@ const VoiceRecorder = () => {
       emailjs.init(config.EMAILJS.publicKey);
     }
   }, []);
+
+  // Test Supabase connection on mount
+  useEffect(() => {
+    const testConnection = async () => {
+      console.log('Testing Supabase connection on component mount...');
+      setSupabaseStatus('testing');
+      const result = await testSupabaseConnection();
+      if (result.success) {
+        setSupabaseStatus('connected');
+        console.log('Supabase connection successful!');
+      } else {
+        setSupabaseStatus('error');
+        console.error('Supabase connection failed:', result.error);
+      }
+    };
+    testConnection();
+  }, []);
+
+  // Manual test function
+  const handleTestSupabase = async () => {
+    setSupabaseStatus('testing');
+    const result = await testSupabaseConnection();
+    if (result.success) {
+      setSupabaseStatus('connected');
+      alert('Supabase connection successful!');
+    } else {
+      setSupabaseStatus('error');
+      alert(`Supabase connection failed: ${result.error}`);
+    }
+  };
 
   // Load microphone devices
   useEffect(() => {
@@ -73,7 +105,12 @@ const VoiceRecorder = () => {
         setVoiceInput(finalInput);
         // Save to Supabase when transcribed and email is present
         if (email) {
-          await saveVoiceInputToSupabase(email, finalInput);
+          const result = await saveVoiceInputToSupabase(email, finalInput);
+          if (result) {
+            setShowSuccessMessage(true);
+            // Hide success message after 10 seconds
+            setTimeout(() => setShowSuccessMessage(false), 10000);
+          }
         }
       };
       recognition.onerror = (event) => {
@@ -156,6 +193,12 @@ const VoiceRecorder = () => {
         if (email) {
           await sendEmailToAndy(voiceInput, email);
         }
+        // Show success message if voice input exists
+        if (voiceInput && email) {
+          setShowSuccessMessage(true);
+          // Hide success message after 10 seconds
+          setTimeout(() => setShowSuccessMessage(false), 10000);
+        }
         setMicStatus({ status: 'available', details: 'Recording completed' });
       };
     }
@@ -210,6 +253,15 @@ const VoiceRecorder = () => {
   // Add this helper function inside the component
   const saveVoiceInputToSupabase = async (email, voiceInput) => {
     try {
+      console.log('Attempting to save to Supabase...');
+      console.log('Email:', email);
+      console.log('VoiceInput length:', voiceInput ? voiceInput.length : 0);
+      
+      if (!email || !voiceInput) {
+        console.error('Missing required data: email or voiceInput');
+        return null;
+      }
+
       // Insert directly into contacts table with email and voiceInput
       const { data, error } = await supabase
         .from('contacts')
@@ -223,6 +275,12 @@ const VoiceRecorder = () => {
 
       if (error) {
         console.error('Error inserting into contacts:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         return null;
       }
       
@@ -230,6 +288,7 @@ const VoiceRecorder = () => {
       return data;
     } catch (error) {
       console.error('Error in saveVoiceInputToSupabase:', error);
+      console.error('Error stack:', error.stack);
       return null;
     }
   };
@@ -258,6 +317,31 @@ const VoiceRecorder = () => {
               <input type="email" id="email" name="email" required value={email} onChange={e => setEmail(e.target.value)} className="border-2 border-red-600 p-2 w-full rounded" />
             </div>
           </form>
+        </div>
+
+        {/* Supabase Connection Test */}
+        <div className="mb-8 bg-white rounded-xl shadow p-6">
+          <h2 className="text-xl font-bold mb-4">Database Connection Test</h2>
+          <div className="flex items-center gap-4 mb-4">
+            <div className={`w-4 h-4 rounded-full ${
+              supabaseStatus === 'connected' ? 'bg-green-500' : 
+              supabaseStatus === 'error' ? 'bg-red-500' : 
+              supabaseStatus === 'testing' ? 'bg-yellow-400' : 'bg-gray-400'
+            }`}></div>
+            <span className="text-sm">
+              {supabaseStatus === 'connected' ? 'Database Connected' : 
+               supabaseStatus === 'error' ? 'Database Connection Error' : 
+               supabaseStatus === 'testing' ? 'Testing Connection...' : 'Connection Status Unknown'}
+            </span>
+          </div>
+          <button 
+            type="button" 
+            onClick={handleTestSupabase} 
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            disabled={supabaseStatus === 'testing'}
+          >
+            {supabaseStatus === 'testing' ? 'Testing...' : 'Test Database Connection'}
+          </button>
         </div>
 
         {/* Voice Recorder Section */}
@@ -334,6 +418,19 @@ const VoiceRecorder = () => {
           {/* Status and Input Display */}
           <div className="mb-2 text-sm text-gray-500">{permissionStatus}</div>
           <textarea id="voiceInput" name="voiceInput" className="w-full border rounded p-2" rows={4} placeholder="Your speech will appear here..." value={voiceInput} onChange={e => setVoiceInput(e.target.value)}></textarea>
+
+          {/* Success Message */}
+          {showSuccessMessage && (
+            <div className="mt-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg">
+              <div className="flex items-center">
+                <div className="w-5 h-5 bg-green-500 rounded-full mr-3 flex-shrink-0"></div>
+                <div>
+                  <p className="font-semibold">Thank you for your request.</p>
+                  <p>You will receive a reply within 12 hours.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Translate Button */}
           {showTranslate && (

@@ -1,6 +1,11 @@
 import React from 'react';
 
 function App() {
+  // Example condition: change this to your actual logic
+  const useJSingh = true; // Set to false to use "Singh Law Group"
+
+  const lawFirmName = useJSingh ? "JSingh Law" : "Singh Law Group";
+
   return (
     <div className="font-sans bg-white text-gray-900">
       {/* Hero Banner */}
@@ -14,7 +19,7 @@ function App() {
 
       {/* About Section */}
       <section className="max-w-3xl mx-auto py-12 px-4 text-center">
-        <h2 className="text-2xl font-bold mb-4">About JSingh Law</h2>
+        <h2 className="text-2xl font-bold mb-4">About Singh Law Group</h2>
         <p className="mb-4">
           Singh Law Group offers comprehensive legal support for individuals, families, and businesses. With a focus on results, integrity, and accessible service, we guide you through real estate, wills, immigration, corporate law, and more.
         </p>
@@ -37,12 +42,12 @@ function App() {
             <p>Incorporations, contracts, shareholder agreements, and advice for entrepreneurs.</p>
           </div>
           <div className="bg-white rounded-2xl shadow p-6">
-            <h3 className="font-semibold mb-2">Wills & Estates</h3>
-            <p>Wills, powers of attorney, estate administration, and planning.</p>
+            <h3 className="font-semibold mb-2">Real Estate Law</h3>
+            <p>Buying, selling, or refinancing homes and properties.</p>
           </div>
           <div className="bg-white rounded-2xl shadow p-6">
-          <h3 className="font-semibold mb-2">Real Estate Law</h3>
-          <p>Buying, selling, or refinancing homes and properties.</p>
+            <h3 className="font-semibold mb-2">Wills & Estates</h3>
+            <p>Wills, powers of attorney, estate administration, and planning.</p>
           </div>
         </div>
       </section>
@@ -57,7 +62,7 @@ function App() {
         <div>
           <h2 className="text-2xl font-bold mb-2">Sumandeep Singh, Lawyer</h2>
           <p>
-            Sumandeep Singh is dedicated to delivering high-quality legal solutions with a client-first approach. With years of experience across multiple practice areas, Sumandeep is committed to providing clear guidance and strong advocacy for every client.
+            Sumandeep Singh and his team are dedicated to delivering high-quality legal solutions with a client-first approach. With years of experience across multiple practice areas, Sumandeep is committed to providing clear guidance and strong advocacy for every client.
           </p>
         </div>
       </section>
@@ -77,8 +82,13 @@ function App() {
 
       {/* Footer */}
       <footer className="bg-gray-100 py-6 px-4 text-center text-sm text-gray-500">
-        <div>JSingh Law | Surrey, BC | (555) 123-4567 | info@jsinghlaw.com</div>
-        <div className="mt-2">&copy; {new Date().getFullYear()} JSingh Law. All rights reserved.</div>
+        <div>
+          Address: 8138 128 St Ste 242, Surrey, BC V3W 1R1<br/>
+          Phone: (604) 503-6161 | info@singhlawgroup.com
+        </div>
+        <div className="mt-2">
+          &copy; 2025 Singh Law Group LLC. All rights reserved.
+        </div>
       </footer>
     </div>
   );

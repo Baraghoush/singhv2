@@ -2,9 +2,9 @@ import React from 'react';
 
 function App() {
   // Example condition: change this to your actual logic
-  const useJSingh = true; // Set to false to use "Singh Law Group"
+  const useSingh = true; // Set to false to use "Singh Law Group"
 
-  const lawFirmName = useJSingh ? "JSingh Law" : "Singh Law Group";
+  const lawFirmName = useSingh ? "Singh Law" : "Singh Law Group";
 
   return (
     <div className="font-sans bg-white text-gray-900">

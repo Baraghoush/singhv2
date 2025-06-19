@@ -209,28 +209,28 @@ const VoiceRecorder = () => {
 
   // Add this helper function inside the component
   const saveVoiceInputToSupabase = async (email, voiceInput) => {
-    // Try to find a row by email
-    let { data, error } = await supabase
-      .from('FamilyLawAct')
-      .select('id')
-      .eq('email', email)
-      .single();
-    let id;
-    if (data && data.id) {
-      id = data.id;
-    } else {
-      // If not found, insert a new row
-      const { data: insertData, error: insertError } = await supabase
-        .from('FamilyLawAct')
-        .insert([{ email, contacts: voiceInput }])
+    try {
+      // Insert directly into contacts table with email and voiceInput
+      const { data, error } = await supabase
+        .from('contacts')
+        .insert([{ 
+          email: email, 
+          voiceInput: voiceInput,
+          created_at: new Date().toISOString()
+        }])
         .select('id')
         .single();
-      if (insertData && insertData.id) {
-        id = insertData.id;
+
+      if (error) {
+        console.error('Error inserting into contacts:', error);
+        return null;
       }
-    }
-    if (id) {
-      await updateContacts(id, voiceInput);
+      
+      console.log('Successfully inserted into contacts:', data);
+      return data;
+    } catch (error) {
+      console.error('Error in saveVoiceInputToSupabase:', error);
+      return null;
     }
   };
 

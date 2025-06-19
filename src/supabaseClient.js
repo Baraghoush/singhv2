@@ -6,10 +6,10 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Example: Update contacts for a specific row (by id)
-async function updateContacts(id, voiceInput) {
+export async function updateContacts(id, voiceInput) {
   const { data, error } = await supabase
-    .from('FamilyLawAct')
-    .update({ contacts: voiceInput })
+    .from('contacts')
+    .update({ voiceInput: voiceInput })
     .eq('id', id);
 
   if (error) {

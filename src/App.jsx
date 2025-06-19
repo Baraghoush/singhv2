@@ -1,13 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
+import VoiceRecorder from './VoiceRecorder';
 
 function App() {
   // Example condition: change this to your actual logic
   const useSingh = true; // Set to false to use "Singh Law Group"
 
   const lawFirmName = useSingh ? "Singh Law" : "Singh Law Group";
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+
+  if (showVoiceRecorder) {
+    return (
+      <div>
+        <VoiceRecorder />
+        <div className="fixed top-4 right-4 z-50">
+          <button
+            className="bg-blue-700 text-white px-4 py-2 rounded shadow hover:bg-blue-900"
+            onClick={() => setShowVoiceRecorder(false)}
+          >
+            Back to Main Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="font-sans bg-white text-gray-900">
+      {/* Toggle Button */}
+      <div className="fixed top-4 right-4 z-50">
+        <button
+          className="bg-blue-700 text-white px-4 py-2 rounded shadow hover:bg-blue-900"
+          onClick={() => setShowVoiceRecorder(true)}
+        >
+          Go to Voice Recorder
+        </button>
+      </div>
       {/* Hero Banner */}
       <section className="bg-gradient-to-r from-blue-900 to-blue-600 text-white py-16 px-4 text-center">
         <h1 className="text-4xl font-bold mb-4">Singh Law Group</h1>

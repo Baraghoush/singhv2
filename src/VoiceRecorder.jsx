@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import emailjs from '@emailjs/browser';
+import { supabase, updateContacts } from './supabaseClient';
 
 // Placeholder config. Replace with your actual config or import from a config file.
 const config = {
@@ -64,11 +65,15 @@ const VoiceRecorder = () => {
       recognition.lang = language;
       recognition.onresult = async (event) => {
         const transcript = Array.from(event.results).map(result => result[0].transcript).join('');
+        let finalInput = transcript;
         if (language !== 'en-US') {
           const translatedText = await translateText(transcript);
-          setVoiceInput(`${transcript}\n\nTranslated to English:\n${translatedText}`);
-        } else {
-          setVoiceInput(transcript);
+          finalInput = `${transcript}\n\nTranslated to English:\n${translatedText}`;
+        }
+        setVoiceInput(finalInput);
+        // Save to Supabase when transcribed and email is present
+        if (email) {
+          await saveVoiceInputToSupabase(email, finalInput);
         }
       };
       recognition.onerror = (event) => {
@@ -82,7 +87,7 @@ const VoiceRecorder = () => {
       setMicStatus({ status: 'error', details: 'Speech recognition not supported in this browser' });
     }
     // eslint-disable-next-line
-  }, [language, isRecording]);
+  }, [language, isRecording, email]);
 
   // Microphone test
   const initializeAudio = async () => {
@@ -201,6 +206,33 @@ const VoiceRecorder = () => {
       if (audioContextRef.current) audioContextRef.current.close();
     };
   }, []);
+
+  // Add this helper function inside the component
+  const saveVoiceInputToSupabase = async (email, voiceInput) => {
+    // Try to find a row by email
+    let { data, error } = await supabase
+      .from('FamilyLawAct')
+      .select('id')
+      .eq('email', email)
+      .single();
+    let id;
+    if (data && data.id) {
+      id = data.id;
+    } else {
+      // If not found, insert a new row
+      const { data: insertData, error: insertError } = await supabase
+        .from('FamilyLawAct')
+        .insert([{ email, contacts: voiceInput }])
+        .select('id')
+        .single();
+      if (insertData && insertData.id) {
+        id = insertData.id;
+      }
+    }
+    if (id) {
+      await updateContacts(id, voiceInput);
+    }
+  };
 
   // UI rendering
   return (

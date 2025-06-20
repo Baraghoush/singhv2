@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-// const supabaseUrl = 'https://sqddisqxpkokbluiwliu.supabase.co';
-// const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxZGRpc3F4cGtva2JsdWl3bGl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc5NjYxMTgsImV4cCI6MjA2MzU0MjExOH0.SAevvIurbpfN3scMkiPBYahdicfoFKnsvarXNXoHL24';
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+// Validate that environment variables are set
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase environment variables. Please check your .env file.');
+  throw new Error('Supabase credentials not found in environment variables');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

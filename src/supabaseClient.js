@@ -31,6 +31,75 @@ export async function testSupabaseConnection() {
   }
 }
 
+// Enhanced test function to check table structure and permissions
+export async function testTableStructure() {
+  try {
+    console.log('Testing table structure and permissions...');
+    
+    // Test 1: Check if table exists and get its structure
+    const { data: tableInfo, error: tableError } = await supabase
+      .from('contacts')
+      .select('*')
+      .limit(0);
+    
+    if (tableError) {
+      console.error('Table structure error:', tableError);
+      return { success: false, error: `Table error: ${tableError.message}` };
+    }
+    
+    console.log('Table exists and is accessible');
+    
+    // Test 2: Try to insert a test record with unique email
+    const timestamp = Date.now();
+    const testData = {
+      email: `test-${timestamp}@example.com`,
+      voiceInput: 'Test voice input',
+      created_at: new Date().toISOString()
+    };
+    
+    const { data: insertData, error: insertError } = await supabase
+      .from('contacts')
+      .insert([testData])
+      .select('id')
+      .single();
+    
+    if (insertError) {
+      console.error('Insert test failed:', insertError);
+      return { 
+        success: false, 
+        error: `Insert failed: ${insertError.message}`,
+        details: insertError
+      };
+    }
+    
+    console.log('Insert test successful:', insertData);
+    
+    // Test 3: Try to delete the test record
+    if (insertData && insertData.id) {
+      const { error: deleteError } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('id', insertData.id);
+      
+      if (deleteError) {
+        console.error('Delete test failed:', deleteError);
+        return { 
+          success: false, 
+          error: `Delete failed: ${deleteError.message}`,
+          details: deleteError
+        };
+      }
+      
+      console.log('Delete test successful');
+    }
+    
+    return { success: true, message: 'All tests passed' };
+  } catch (error) {
+    console.error('Table structure test failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Example: Update contacts for a specific row (by id)
 export async function updateContacts(id, voiceInput) {
   const { data, error } = await supabase

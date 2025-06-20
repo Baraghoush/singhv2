@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import emailjs from '@emailjs/browser';
-import { supabase, updateContacts, testSupabaseConnection } from './supabaseClient';
+import { supabase, updateContacts, testSupabaseConnection, testTableStructure } from './supabaseClient';
 
 // Placeholder config. Replace with your actual config or import from a config file.
 const config = {
@@ -25,6 +25,7 @@ const VoiceRecorder = () => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [supabaseStatus, setSupabaseStatus] = useState('unknown');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [lastOperation, setLastOperation] = useState(''); // 'insert' or 'update'
 
   // Refs
   const mediaRecorderRef = useRef(null);
@@ -47,13 +48,26 @@ const VoiceRecorder = () => {
     const testConnection = async () => {
       console.log('Testing Supabase connection on component mount...');
       setSupabaseStatus('testing');
-      const result = await testSupabaseConnection();
-      if (result.success) {
+      
+      // First test basic connection
+      const connectionResult = await testSupabaseConnection();
+      if (!connectionResult.success) {
+        setSupabaseStatus('error');
+        console.error('Supabase connection failed:', connectionResult.error);
+        return;
+      }
+      
+      // Then test table structure and permissions
+      const tableResult = await testTableStructure();
+      if (tableResult.success) {
         setSupabaseStatus('connected');
-        console.log('Supabase connection successful!');
+        console.log('Supabase connection and table structure successful!');
       } else {
         setSupabaseStatus('error');
-        console.error('Supabase connection failed:', result.error);
+        console.error('Table structure test failed:', tableResult.error);
+        if (tableResult.details) {
+          console.error('Error details:', tableResult.details);
+        }
       }
     };
     testConnection();
@@ -62,13 +76,23 @@ const VoiceRecorder = () => {
   // Manual test function
   const handleTestSupabase = async () => {
     setSupabaseStatus('testing');
-    const result = await testSupabaseConnection();
-    if (result.success) {
+    
+    // Test basic connection
+    const connectionResult = await testSupabaseConnection();
+    if (!connectionResult.success) {
+      setSupabaseStatus('error');
+      alert(`Supabase connection failed: ${connectionResult.error}`);
+      return;
+    }
+    
+    // Test table structure
+    const tableResult = await testTableStructure();
+    if (tableResult.success) {
       setSupabaseStatus('connected');
-      alert('Supabase connection successful!');
+      alert('Supabase connection and table structure successful!');
     } else {
       setSupabaseStatus('error');
-      alert(`Supabase connection failed: ${result.error}`);
+      alert(`Table structure test failed: ${tableResult.error}`);
     }
   };
 
@@ -97,20 +121,35 @@ const VoiceRecorder = () => {
       recognition.lang = language;
       recognition.onresult = async (event) => {
         const transcript = Array.from(event.results).map(result => result[0].transcript).join('');
+        console.log('=== SPEECH RECOGNITION RESULT ===');
+        console.log('Raw transcript:', transcript);
+        console.log('Current email:', email);
+        
         let finalInput = transcript;
         if (language !== 'en-US') {
+          console.log('Translating from', language, 'to English...');
           const translatedText = await translateText(transcript);
           finalInput = `${transcript}\n\nTranslated to English:\n${translatedText}`;
+          console.log('Translated input:', finalInput);
         }
+        
         setVoiceInput(finalInput);
+        console.log('Voice input updated, length:', finalInput.length);
+        
         // Save to Supabase when transcribed and email is present
         if (email) {
+          console.log('Email present, attempting to save to Supabase...');
           const result = await saveVoiceInputToSupabase(email, finalInput);
           if (result) {
+            console.log('Save successful, showing success message');
             setShowSuccessMessage(true);
             // Hide success message after 10 seconds
             setTimeout(() => setShowSuccessMessage(false), 10000);
+          } else {
+            console.error('Save failed, not showing success message');
           }
+        } else {
+          console.log('No email present, skipping save to Supabase');
         }
       };
       recognition.onerror = (event) => {
@@ -253,43 +292,170 @@ const VoiceRecorder = () => {
   // Add this helper function inside the component
   const saveVoiceInputToSupabase = async (email, voiceInput) => {
     try {
-      console.log('Attempting to save to Supabase...');
+      console.log('=== SAVE VOICE INPUT TO SUPABASE ===');
       console.log('Email:', email);
       console.log('VoiceInput length:', voiceInput ? voiceInput.length : 0);
+      console.log('VoiceInput preview:', voiceInput ? voiceInput.substring(0, 100) + '...' : 'null');
       
       if (!email || !voiceInput) {
         console.error('Missing required data: email or voiceInput');
+        console.error('Email present:', !!email);
+        console.error('VoiceInput present:', !!voiceInput);
         return null;
       }
 
-      // Insert directly into contacts table with email and voiceInput
-      const { data, error } = await supabase
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        console.error('Invalid email format:', email);
+        return null;
+      }
+
+      // Prepare data for insertion/update
+      const insertData = { 
+        email: email.trim(), 
+        voiceInput: voiceInput.trim(),
+        created_at: new Date().toISOString()
+      };
+      
+      console.log('Insert/update data:', insertData);
+
+      // First, check if a record with this email already exists
+      const { data: existingRecord, error: checkError } = await supabase
         .from('contacts')
-        .insert([{ 
-          email: email, 
-          voiceInput: voiceInput,
-          created_at: new Date().toISOString()
-        }])
-        .select('id')
+        .select('id, email, voiceInput, created_at')
+        .eq('email', email.trim())
         .single();
 
-      if (error) {
-        console.error('Error inserting into contacts:', error);
-        console.error('Error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error checking existing record:', checkError);
         return null;
       }
+
+      let result;
+      if (existingRecord) {
+        // Update existing record
+        console.log('Updating existing record:', existingRecord.id);
+        const { data, error } = await supabase
+          .from('contacts')
+          .update({ 
+            voiceInput: voiceInput.trim(),
+            created_at: new Date().toISOString()
+          })
+          .eq('id', existingRecord.id)
+          .select('id, email, voiceInput, created_at')
+          .single();
+
+        if (error) {
+          console.error('=== SUPABASE UPDATE ERROR ===');
+          console.error('Error message:', error.message);
+          console.error('Error details:', error.details);
+          console.error('Error hint:', error.hint);
+          console.error('Error code:', error.code);
+          console.error('Full error object:', error);
+          return null;
+        }
+        
+        console.log('=== SUPABASE UPDATE SUCCESS ===');
+        console.log('Updated data:', data);
+        result = data;
+        setLastOperation('update');
+      } else {
+        // Insert new record
+        console.log('Creating new record');
+        const { data, error } = await supabase
+          .from('contacts')
+          .insert([insertData])
+          .select('id, email, voiceInput, created_at')
+          .single();
+
+        if (error) {
+          console.error('=== SUPABASE INSERT ERROR ===');
+          console.error('Error message:', error.message);
+          console.error('Error details:', error.details);
+          console.error('Error hint:', error.hint);
+          console.error('Error code:', error.code);
+          console.error('Full error object:', error);
+          return null;
+        }
+        
+        console.log('=== SUPABASE INSERT SUCCESS ===');
+        console.log('Inserted data:', data);
+        result = data;
+        setLastOperation('insert');
+      }
       
-      console.log('Successfully inserted into contacts:', data);
+      // Verify the record was actually saved
+      await verifyRecordSaved(result.id);
+      
+      return result;
+    } catch (error) {
+      console.error('=== EXCEPTION IN SAVE VOICE INPUT ===');
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      console.error('Full error object:', error);
+      return null;
+    }
+  };
+
+  // Function to verify that a record was actually saved
+  const verifyRecordSaved = async (recordId) => {
+    try {
+      console.log('=== VERIFYING RECORD SAVED ===');
+      console.log('Checking for record ID:', recordId);
+      
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, email, voiceInput, created_at')
+        .eq('id', recordId)
+        .single();
+      
+      if (error) {
+        console.error('Error verifying record:', error);
+        return false;
+      }
+      
+      if (data) {
+        console.log('=== RECORD VERIFICATION SUCCESS ===');
+        console.log('Found record:', data);
+        return true;
+      } else {
+        console.error('Record not found after insertion');
+        return false;
+      }
+    } catch (error) {
+      console.error('Exception in verifyRecordSaved:', error);
+      return false;
+    }
+  };
+
+  // Function to check all records for an email
+  const checkRecordsForEmail = async (email) => {
+    try {
+      console.log('=== CHECKING RECORDS FOR EMAIL ===');
+      console.log('Email:', email);
+      
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, email, voiceInput, created_at')
+        .eq('email', email)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error checking records:', error);
+        return [];
+      }
+      
+      console.log('=== RECORDS FOUND ===');
+      console.log('Number of records:', data.length);
+      data.forEach((record, index) => {
+        console.log(`Record ${index + 1}:`, record);
+      });
+      
       return data;
     } catch (error) {
-      console.error('Error in saveVoiceInputToSupabase:', error);
-      console.error('Error stack:', error.stack);
-      return null;
+      console.error('Exception in checkRecordsForEmail:', error);
+      return [];
     }
   };
 
@@ -334,14 +500,25 @@ const VoiceRecorder = () => {
                supabaseStatus === 'testing' ? 'Testing Connection...' : 'Connection Status Unknown'}
             </span>
           </div>
-          <button 
-            type="button" 
-            onClick={handleTestSupabase} 
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            disabled={supabaseStatus === 'testing'}
-          >
-            {supabaseStatus === 'testing' ? 'Testing...' : 'Test Database Connection'}
-          </button>
+          <div className="flex gap-2">
+            <button 
+              type="button" 
+              onClick={handleTestSupabase} 
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              disabled={supabaseStatus === 'testing'}
+            >
+              {supabaseStatus === 'testing' ? 'Testing...' : 'Test Database Connection'}
+            </button>
+            {email && (
+              <button 
+                type="button" 
+                onClick={() => checkRecordsForEmail(email)} 
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+              >
+                Check Records for Email
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Voice Recorder Section */}
@@ -426,7 +603,11 @@ const VoiceRecorder = () => {
                 <div className="w-5 h-5 bg-green-500 rounded-full mr-3 flex-shrink-0"></div>
                 <div>
                   <p className="font-semibold">Thank you for your request.</p>
+                  <p>Your voice input has been saved to the database.</p>
+                  <p className="text-sm mt-1">Email: {email}</p>
+                  <p className="text-sm">Input length: {voiceInput.length} characters</p>
                   <p>You will receive a reply within 12 hours.</p>
+                  <p className="text-sm mt-1">Last operation: {lastOperation}</p>
                 </div>
               </div>
             </div>

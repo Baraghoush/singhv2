@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import emailjs from '@emailjs/browser';
 import { supabase, updateContacts, testSupabaseConnection, testTableStructure } from './supabaseClient';
 
@@ -388,6 +389,15 @@ const VoiceRecorder = () => {
       // Verify the record was actually saved
       await verifyRecordSaved(result.id);
       
+      // Send email automatically after successful save
+      console.log('=== SENDING EMAIL AUTOMATICALLY ===');
+      const emailResult = await sendEmailToAndy(voiceInput, email);
+      if (emailResult) {
+        console.log('Email sent successfully');
+      } else {
+        console.error('Failed to send email');
+      }
+      
       return result;
     } catch (error) {
       console.error('=== EXCEPTION IN SAVE VOICE INPUT ===');
@@ -467,7 +477,8 @@ const VoiceRecorder = () => {
         <div className="header-container flex justify-between items-center max-w-5xl mx-auto px-4">
           <div className="logo font-bold text-lg">British Columbia Supreme Court Family Law Integration</div>
           <nav className="user-nav flex gap-4 items-center">
-            <a href="/" className="hover:underline">Home</a>
+            <Link to="/" className="hover:underline">Home</Link>
+            <Link to="/email-sender" className="hover:underline">Email Sender</Link>
             <span className="text-gray-300 italic">(IN CONSTRUCTION)</span>
           </nav>
         </div>
@@ -608,6 +619,19 @@ const VoiceRecorder = () => {
                   <p className="text-sm">Input length: {voiceInput.length} characters</p>
                   <p>You will receive a reply within 12 hours.</p>
                   <p className="text-sm mt-1">Last operation: {lastOperation}</p>
+                  <button
+                    onClick={async () => {
+                      const result = await sendEmailToAndy(voiceInput, email);
+                      if (result) {
+                        alert('Email sent successfully!');
+                      } else {
+                        alert('Failed to send email. Please try again.');
+                      }
+                    }}
+                    className="mt-2 bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                  >
+                    Send Email Again
+                  </button>
                 </div>
               </div>
             </div>
@@ -631,8 +655,8 @@ const VoiceRecorder = () => {
       <footer className="site-footer bg-gray-100 py-4 text-center text-sm text-gray-500 mt-8">
         <div className="footer-container flex flex-col md:flex-row justify-center gap-4">
           <nav className="footer-nav flex gap-4">
-            <a href="#top" className="hover:underline">Back to Top</a>
-            <a href="/" className="hover:underline">Home</a>
+            <Link to="/" className="hover:underline">Home</Link>
+            <Link to="/email-sender" className="hover:underline">Email Sender</Link>
           </nav>
         </div>
       </footer>

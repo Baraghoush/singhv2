@@ -1,40 +1,33 @@
 import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import VoiceRecorder from './VoiceRecorder';
+import EmailSender from './EmailSender';
 
 function App() {
   // Example condition: change this to your actual logic
   const useSingh = true; // Set to false to use "Singh Law Group"
 
   const lawFirmName = useSingh ? "Singh Law" : "Singh Law Group";
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
 
-  if (showVoiceRecorder) {
-    return (
-      <div>
-        <VoiceRecorder />
-        <div className="fixed top-4 right-4 z-50">
-          <button
-            className="bg-blue-700 text-white px-4 py-2 rounded shadow hover:bg-blue-900"
-            onClick={() => setShowVoiceRecorder(false)}
-          >
-            Back to Main Page
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
+  // Main page component
+  const MainPage = () => (
     <div className="font-sans bg-white text-gray-900">
-      {/* Toggle Button */}
-      <div className="fixed top-4 right-4 z-50">
-        <button
+      {/* Navigation */}
+      <div className="fixed top-4 right-4 z-50 flex gap-2">
+        <Link
+          to="/voice-recorder"
           className="bg-blue-700 text-white px-4 py-2 rounded shadow hover:bg-blue-900"
-          onClick={() => setShowVoiceRecorder(true)}
         >
-          Go to Voice Recorder
-        </button>
+          Voice Recorder
+        </Link>
+        <Link
+          to="/email-sender"
+          className="bg-green-700 text-white px-4 py-2 rounded shadow hover:bg-green-900"
+        >
+          Email Sender
+        </Link>
       </div>
+
       {/* Hero Banner */}
       <section className="bg-gradient-to-r from-blue-900 to-blue-600 text-white py-16 px-4 text-center">
         <h1 className="text-4xl font-bold mb-4">Singh Law Group</h1>
@@ -118,6 +111,16 @@ function App() {
         </div>
       </footer>
     </div>
+  );
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<MainPage />} />
+        <Route path="/voice-recorder" element={<VoiceRecorder />} />
+        <Route path="/email-sender" element={<EmailSender />} />
+      </Routes>
+    </Router>
   );
 }
 

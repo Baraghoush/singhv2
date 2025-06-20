@@ -113,3 +113,191 @@ export async function updateContacts(id, voiceInput) {
   }
   return data;
 }
+
+// Function to get all records from contacts table
+export async function getAllContacts() {
+  try {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('id, email, voiceInput, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching contacts:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Exception in getAllContacts:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+// Function to get contacts by email
+export async function getContactsByEmail(email) {
+  try {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('id, email, voiceInput, created_at')
+      .eq('email', email)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching contacts by email:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Exception in getContactsByEmail:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+// Function to send email for a specific contact record
+export async function sendEmailForContact(contactRecord, emailjsConfig) {
+  try {
+    if (!contactRecord || !contactRecord.email || !contactRecord.voiceInput) {
+      console.error('Invalid contact record for email sending:', contactRecord);
+      return { success: false, error: 'Invalid contact record' };
+    }
+
+    // Import emailjs dynamically to avoid SSR issues
+    const emailjs = await import('@emailjs/browser');
+    
+    // Initialize EmailJS if not already initialized
+    if (emailjsConfig && emailjsConfig.publicKey) {
+      emailjs.init(emailjsConfig.publicKey);
+    }
+
+    const templateParams = {
+      to_email: 'andybaronca@gmail.com',
+      from_name: 'Family Law Assistant',
+      question: `Voice Recording from ${contactRecord.email}`,
+      answer: contactRecord.voiceInput,
+      timestamp: new Date(contactRecord.created_at).toLocaleString(),
+      record_id: contactRecord.id,
+      original_email: contactRecord.email
+    };
+
+    const result = await emailjs.send(
+      'service_v3epzv2', 
+      'template_fuz4031', 
+      templateParams
+    );
+
+    console.log('Email sent successfully for record:', contactRecord.id);
+    return { success: true, result };
+  } catch (error) {
+    console.error('Error sending email for contact:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Function to send emails for all contacts
+export async function sendEmailsForAllContacts(emailjsConfig) {
+  try {
+    console.log('Fetching all contacts for email sending...');
+    
+    const contactsResult = await getAllContacts();
+    if (!contactsResult.success) {
+      return { success: false, error: contactsResult.error };
+    }
+
+    const contacts = contactsResult.data;
+    console.log(`Found ${contacts.length} contacts to send emails for`);
+
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const contact of contacts) {
+      console.log(`Sending email for contact: ${contact.email} (ID: ${contact.id})`);
+      
+      const emailResult = await sendEmailForContact(contact, emailjsConfig);
+      results.push({
+        contactId: contact.id,
+        email: contact.email,
+        success: emailResult.success,
+        error: emailResult.error
+      });
+
+      if (emailResult.success) {
+        successCount++;
+      } else {
+        errorCount++;
+      }
+
+      // Add a small delay between emails to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    console.log(`Email sending completed. Success: ${successCount}, Errors: ${errorCount}`);
+    
+    return {
+      success: true,
+      totalContacts: contacts.length,
+      successCount,
+      errorCount,
+      results
+    };
+  } catch (error) {
+    console.error('Error in sendEmailsForAllContacts:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Function to send emails for contacts by email address
+export async function sendEmailsForEmailAddress(email, emailjsConfig) {
+  try {
+    console.log(`Fetching contacts for email: ${email}`);
+    
+    const contactsResult = await getContactsByEmail(email);
+    if (!contactsResult.success) {
+      return { success: false, error: contactsResult.error };
+    }
+
+    const contacts = contactsResult.data;
+    console.log(`Found ${contacts.length} contacts for email: ${email}`);
+
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const contact of contacts) {
+      console.log(`Sending email for contact: ${contact.email} (ID: ${contact.id})`);
+      
+      const emailResult = await sendEmailForContact(contact, emailjsConfig);
+      results.push({
+        contactId: contact.id,
+        email: contact.email,
+        success: emailResult.success,
+        error: emailResult.error
+      });
+
+      if (emailResult.success) {
+        successCount++;
+      } else {
+        errorCount++;
+      }
+
+      // Add a small delay between emails to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    console.log(`Email sending completed for ${email}. Success: ${successCount}, Errors: ${errorCount}`);
+    
+    return {
+      success: true,
+      emailAddress: email,
+      totalContacts: contacts.length,
+      successCount,
+      errorCount,
+      results
+    };
+  } catch (error) {
+    console.error('Error in sendEmailsForEmailAddress:', error);
+    return { success: false, error: error.message };
+  }
+}

@@ -4,7 +4,8 @@ import {
   getAllContacts, 
   getContactsByEmail, 
   sendEmailsForAllContacts, 
-  sendEmailsForEmailAddress 
+  sendEmailsForEmailAddress,
+  cleanupInvalidRecords
 } from './supabaseClient';
 
 const EmailSender = () => {
@@ -52,9 +53,18 @@ const EmailSender = () => {
     try {
       const result = await sendEmailsForAllContacts(emailjsConfig);
       if (result.success) {
-        setEmailStatus(
-          `Email sending completed! Success: ${result.successCount}, Errors: ${result.errorCount} out of ${result.totalContacts} total contacts.`
-        );
+        const successMessage = `Email sending completed! Success: ${result.successCount}, Errors: ${result.errorCount} out of ${result.totalContacts} total contacts.`;
+        
+        // Add detailed error information if there are errors
+        if (result.errorCount > 0 && result.results) {
+          const errorDetails = result.results
+            .filter(r => !r.success)
+            .map(r => `${r.email}: ${r.error}`)
+            .join(', ');
+          setEmailStatus(`${successMessage}\n\nErrors: ${errorDetails}`);
+        } else {
+          setEmailStatus(successMessage);
+        }
       } else {
         setEmailStatus(`Email sending failed: ${result.error}`);
       }
@@ -87,6 +97,27 @@ const EmailSender = () => {
     } catch (error) {
       console.error('Exception sending emails:', error);
       setEmailStatus(`Exception sending emails: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCleanupInvalidRecords = async () => {
+    setLoading(true);
+    setEmailStatus('Cleaning up invalid records...');
+    
+    try {
+      const result = await cleanupInvalidRecords();
+      if (result.success) {
+        setEmailStatus(`Cleanup completed: ${result.message}`);
+        // Reload contacts after cleanup
+        await loadAllContacts();
+      } else {
+        setEmailStatus(`Cleanup failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Exception during cleanup:', error);
+      setEmailStatus(`Exception during cleanup: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -143,6 +174,13 @@ const EmailSender = () => {
               className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:bg-gray-400"
             >
               {loading ? 'Sending...' : `Send All Emails (${allContacts.length})`}
+            </button>
+            <button
+              onClick={handleCleanupInvalidRecords}
+              disabled={loading}
+              className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 disabled:bg-gray-400"
+            >
+              {loading ? 'Cleaning...' : 'Clean Invalid Records'}
             </button>
           </div>
 

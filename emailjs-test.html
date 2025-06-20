@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmailJS Test</title>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+</head>
+<body>
+    <h1>EmailJS Test</h1>
+    <button onclick="testEmailJS()">Test EmailJS</button>
+    <div id="result"></div>
+
+    <script>
+        // Initialize EmailJS
+        emailjs.init('8ebA--sjSPqBP4A9N');
+
+        function testEmailJS() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Sending test email...';
+
+            const templateParams = {
+                to_email: 'andybaronca@gmail.com',
+                from_name: 'Family Law Assistant',
+                question: 'Test email from EmailJS test page',
+                answer: 'This is a test email to verify EmailJS is working properly.',
+                timestamp: new Date().toLocaleString(),
+                record_id: 'test-123',
+                original_email: 'test@example.com'
+            };
+
+            emailjs.send('service_v3epzv2', 'template_fuz4031', templateParams)
+                .then(function(response) {
+                    console.log('SUCCESS!', response);
+                    resultDiv.innerHTML = '✅ Email sent successfully! Check: ' + response.text;
+                }, function(error) {
+                    console.error('FAILED...', error);
+                    resultDiv.innerHTML = '❌ Email failed: ' + error.text;
+                });
+        }
+    </script>
+</body>
+</html> 

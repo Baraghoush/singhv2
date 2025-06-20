@@ -164,9 +164,23 @@ export async function getContactsByEmail(email) {
 // Function to send email for a specific contact record
 export async function sendEmailForContact(contactRecord, emailjsConfig) {
   try {
+    console.log('=== SEND EMAIL FOR CONTACT ===');
+    console.log('Contact record:', contactRecord);
+    
     if (!contactRecord || !contactRecord.email || !contactRecord.voiceInput) {
       console.error('Invalid contact record for email sending:', contactRecord);
-      return { success: false, error: 'Invalid contact record' };
+      return { success: false, error: 'Invalid contact record - missing email or voice input' };
+    }
+
+    // Additional validation
+    if (contactRecord.email.trim() === '') {
+      console.error('Empty email address:', contactRecord);
+      return { success: false, error: 'Empty email address' };
+    }
+
+    if (contactRecord.voiceInput.trim() === '') {
+      console.error('Empty voice input:', contactRecord);
+      return { success: false, error: 'Empty voice input' };
     }
 
     // Import emailjs dynamically to avoid SSR issues
@@ -175,6 +189,10 @@ export async function sendEmailForContact(contactRecord, emailjsConfig) {
     // Initialize EmailJS if not already initialized
     if (emailjsConfig && emailjsConfig.publicKey) {
       emailjs.init(emailjsConfig.publicKey);
+      console.log('EmailJS initialized with public key');
+    } else {
+      console.error('Missing EmailJS public key');
+      return { success: false, error: 'Missing EmailJS configuration' };
     }
 
     const templateParams = {
@@ -187,16 +205,21 @@ export async function sendEmailForContact(contactRecord, emailjsConfig) {
       original_email: contactRecord.email
     };
 
+    console.log('Sending email with template params:', templateParams);
+
     const result = await emailjs.send(
       'service_v3epzv2', 
       'template_fuz4031', 
       templateParams
     );
 
-    console.log('Email sent successfully for record:', contactRecord.id);
+    console.log('✅ Email sent successfully for record:', contactRecord.id);
+    console.log('EmailJS result:', result);
     return { success: true, result };
   } catch (error) {
-    console.error('Error sending email for contact:', error);
+    console.error('❌ Error sending email for contact:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
     return { success: false, error: error.message };
   }
 }
@@ -304,6 +327,60 @@ export async function sendEmailsForEmailAddress(email, emailjsConfig) {
     };
   } catch (error) {
     console.error('Error in sendEmailsForEmailAddress:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Function to clean up invalid records (empty voice input or invalid emails)
+export async function cleanupInvalidRecords() {
+  try {
+    console.log('=== CLEANING UP INVALID RECORDS ===');
+    
+    // Get all contacts
+    const contactsResult = await getAllContacts();
+    if (!contactsResult.success) {
+      return { success: false, error: contactsResult.error };
+    }
+
+    const contacts = contactsResult.data;
+    const recordsToDelete = [];
+    
+    // Find records with empty voice input or invalid emails
+    contacts.forEach(contact => {
+      const hasEmptyVoice = !contact.voiceInput || contact.voiceInput.trim() === '';
+      const hasEmptyEmail = !contact.email || contact.email.trim() === '';
+      const hasInvalidEmail = contact.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email);
+      
+      if (hasEmptyVoice || hasEmptyEmail || hasInvalidEmail) {
+        recordsToDelete.push(contact.id);
+        console.log(`Marking for deletion: ${contact.email} (ID: ${contact.id}) - Empty voice: ${hasEmptyVoice}, Empty email: ${hasEmptyEmail}, Invalid email: ${hasInvalidEmail}`);
+      }
+    });
+
+    if (recordsToDelete.length === 0) {
+      console.log('No invalid records found to clean up');
+      return { success: true, deletedCount: 0, message: 'No invalid records found' };
+    }
+
+    // Delete the invalid records
+    const { error: deleteError } = await supabase
+      .from('contacts')
+      .delete()
+      .in('id', recordsToDelete);
+
+    if (deleteError) {
+      console.error('Error deleting invalid records:', deleteError);
+      return { success: false, error: deleteError.message };
+    }
+
+    console.log(`✅ Successfully deleted ${recordsToDelete.length} invalid records`);
+    return { 
+      success: true, 
+      deletedCount: recordsToDelete.length, 
+      message: `Deleted ${recordsToDelete.length} invalid records` 
+    };
+  } catch (error) {
+    console.error('Exception in cleanupInvalidRecords:', error);
     return { success: false, error: error.message };
   }
 }

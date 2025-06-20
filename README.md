@@ -17,6 +17,7 @@ This project uses environment variables to keep sensitive credentials secure. Cr
 REACT_APP_SUPABASE_URL=your_supabase_url_here
 REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 REACT_APP_GOOGLE_API_KEY=your_google_api_key_here
+REACT_APP_GOOGLE_TRANSLATE_API_KEY=your_google_translate_api_key_here
 ```
 
 **Important:** 

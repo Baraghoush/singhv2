@@ -148,15 +148,42 @@ const VoiceRecorder = () => {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = language;
+      
+      // Handle Persian language codes - try different variants if one fails
+      let langToUse = language;
+      if (language.startsWith('fa')) {
+        // For Persian, try the specific code first, then fallback to generic
+        langToUse = language;
+      }
+      
+      recognition.lang = langToUse;
+      console.log('Using language code:', langToUse);
       
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
+        
+        // If it's a language error and we're using Persian, try fallback
+        if (event.error === 'language-not-supported' && language.startsWith('fa')) {
+          console.log('Persian language not supported, trying fallback...');
+          if (language === 'fa-IR' || language === 'fa-AF') {
+            // Try generic Persian
+            recognition.lang = 'fa';
+            console.log('Trying generic Persian (fa)');
+            try {
+              recognition.start();
+              return;
+            } catch (fallbackError) {
+              console.error('Fallback Persian also failed:', fallbackError);
+            }
+          }
+        }
+        
         setMicStatus({ status: 'error', details: `Speech recognition error: ${event.error}` });
       };
       
       recognition.onstart = () => {
-        console.log('Speech recognition started');
+        console.log('Speech recognition started with language:', langToUse);
+        setMicStatus({ status: 'available', details: `Recording in ${language}` });
       };
       
       recognition.onend = () => {
@@ -776,6 +803,82 @@ const VoiceRecorder = () => {
     }
   };
 
+  // Test if a language is supported by speech recognition
+  const testLanguageSupport = async (langCode) => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      return { supported: false, error: 'Speech recognition not available' };
+    }
+    
+    try {
+      const testRecognition = new SpeechRecognition();
+      testRecognition.lang = langCode;
+      testRecognition.continuous = false;
+      testRecognition.interimResults = false;
+      
+      return new Promise((resolve) => {
+        testRecognition.onerror = (event) => {
+          if (event.error === 'language-not-supported') {
+            resolve({ supported: false, error: 'Language not supported' });
+          } else {
+            resolve({ supported: true, error: null }); // Other errors might be due to no audio, but language is supported
+          }
+        };
+        
+        testRecognition.onstart = () => {
+          testRecognition.stop();
+          resolve({ supported: true, error: null });
+        };
+        
+        // Start the test
+        testRecognition.start();
+        
+        // Timeout after 2 seconds
+        setTimeout(() => {
+          resolve({ supported: false, error: 'Test timeout' });
+        }, 2000);
+      });
+    } catch (error) {
+      return { supported: false, error: error.message };
+    }
+  };
+
+  // Handle language change with support testing
+  const handleLanguageChange = async (newLanguage) => {
+    console.log('=== LANGUAGE CHANGE REQUESTED ===');
+    console.log('New language:', newLanguage);
+    
+    setLanguage(newLanguage);
+    
+    // Test language support for Persian variants
+    if (newLanguage.startsWith('fa')) {
+      console.log('Testing Persian language support...');
+      const support = await testLanguageSupport(newLanguage);
+      
+      if (!support.supported) {
+        console.log('Primary Persian code not supported, trying fallback...');
+        
+        // Try generic Persian as fallback
+        const fallbackSupport = await testLanguageSupport('fa');
+        if (fallbackSupport.supported) {
+          console.log('Using generic Persian fallback');
+          setLanguage('fa');
+        } else {
+          console.log('No Persian variant supported');
+          setMicStatus({ 
+            status: 'error', 
+            details: 'Persian speech recognition not supported in this browser. Please try English or another supported language.' 
+          });
+        }
+      } else {
+        console.log('Persian language supported');
+        setMicStatus({ status: 'available', details: `Language set to ${newLanguage}` });
+      }
+    } else {
+      setMicStatus({ status: 'available', details: `Language set to ${newLanguage}` });
+    }
+  };
+
   // UI rendering
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -846,13 +949,15 @@ const VoiceRecorder = () => {
           {/* Language Selection */}
           <div className="mb-4">
             <label htmlFor="languageSelect" className="mr-2">Select Language:</label>
-            <select id="languageSelect" value={language} onChange={e => setLanguage(e.target.value)} className="border p-2 rounded">
+            <select id="languageSelect" value={language} onChange={e => handleLanguageChange(e.target.value)} className="border p-2 rounded">
               <option value="en-US">English (US)</option>
               <option value="en-CA">English (CA)</option>
               <option value="hi-IN">Hindi</option>
               <option value="pa-IN">Punjabi</option>
               <option value="ar-SA">Arabic (Saudi Arabia)</option>
-              <option value="fa-IR">Persian (Farsi)</option>
+              <option value="fa-IR">Persian (Farsi) - Iran</option>
+              <option value="fa-AF">Persian (Dari) - Afghanistan</option>
+              <option value="fa">Persian (Generic)</option>
               <option value="zh-CN">Chinese (Mandarin - Simplified)</option>
               <option value="zh-HK">Chinese (Cantonese - Hong Kong)</option>
               <option value="zh-TW">Chinese (Traditional)</option>
@@ -864,6 +969,13 @@ const VoiceRecorder = () => {
               <option value="it-IT">Italian</option>
               <option value="pt-BR">Portuguese</option>
             </select>
+            <div className="text-sm text-gray-600 mt-1">
+              {language.startsWith('fa') && (
+                <span className="text-orange-600">
+                  ⚠️ Persian support varies by browser. If speech recognition fails, try English or another supported language.
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Microphone Device Selection */}

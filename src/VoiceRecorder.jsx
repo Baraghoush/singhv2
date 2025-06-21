@@ -47,7 +47,8 @@ const VoiceRecorder = () => {
     'ru': 'Russian',
     'ar': 'Arabic',
     'hi': 'Hindi',
-    'pa': 'Punjabi'
+    'pa': 'Punjabi',
+    'fa': 'Persian'
   };
 
   // Refs

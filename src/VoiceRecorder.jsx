@@ -142,11 +142,56 @@ const VoiceRecorder = () => {
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
+      console.log('=== SETTING UP SPEECH RECOGNITION ===');
+      console.log('Language:', language);
+      
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = language;
-      recognition.onresult = async (event) => {
+      
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setMicStatus({ status: 'error', details: `Speech recognition error: ${event.error}` });
+      };
+      
+      recognition.onstart = () => {
+        console.log('Speech recognition started');
+      };
+      
+      recognition.onend = () => {
+        console.log('Speech recognition ended. isRecording:', isRecording, 'manuallyStopping:', manuallyStoppingRef.current);
+        // Only restart if we're still recording and the recognition was not manually stopped
+        if (isRecording && !manuallyStoppingRef.current) {
+          console.log('Restarting speech recognition...');
+          // Add a small delay to ensure state updates have taken effect
+          setTimeout(() => {
+            if (isRecording && !manuallyStoppingRef.current && recognitionRef.current) {
+              try {
+                recognitionRef.current.start();
+              } catch (error) {
+                console.error('Error restarting speech recognition:', error);
+              }
+            }
+          }, 100);
+        } else {
+          console.log('Not restarting speech recognition - recording stopped or manually stopped');
+        }
+      };
+      
+      recognitionRef.current = recognition;
+      console.log('Speech recognition setup completed');
+    } else {
+      console.error('Speech recognition not supported in this browser');
+      setMicStatus({ status: 'error', details: 'Speech recognition not supported in this browser' });
+    }
+    // eslint-disable-next-line
+  }, [language]); // Remove isRecording and email from dependencies to prevent recreation
+
+  // Update speech recognition result handler when email changes
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.onresult = async (event) => {
         const transcript = Array.from(event.results).map(result => result[0].transcript).join('');
         console.log('=== SPEECH RECOGNITION RESULT ===');
         console.log('Raw transcript:', transcript);
@@ -185,30 +230,8 @@ const VoiceRecorder = () => {
           console.log('No email present, skipping save to Supabase');
         }
       };
-      recognition.onerror = (event) => {
-        setMicStatus({ status: 'error', details: `Speech recognition error: ${event.error}` });
-      };
-      recognition.onend = () => {
-        console.log('Speech recognition ended. isRecording:', isRecording, 'manuallyStopping:', manuallyStoppingRef.current);
-        // Only restart if we're still recording and the recognition was not manually stopped
-        if (isRecording && !manuallyStoppingRef.current) {
-          console.log('Restarting speech recognition...');
-          // Add a small delay to ensure state updates have taken effect
-          setTimeout(() => {
-            if (isRecording && !manuallyStoppingRef.current && recognitionRef.current) {
-              recognitionRef.current.start();
-            }
-          }, 100);
-        } else {
-          console.log('Not restarting speech recognition - recording stopped or manually stopped');
-        }
-      };
-      recognitionRef.current = recognition;
-    } else {
-      setMicStatus({ status: 'error', details: 'Speech recognition not supported in this browser' });
     }
-    // eslint-disable-next-line
-  }, [language, isRecording, email]);
+  }, [email, language]);
 
   // Microphone test
   const initializeAudio = async () => {
@@ -249,21 +272,72 @@ const VoiceRecorder = () => {
   // Recording logic
   const handleStartRecording = async () => {
     try {
+      console.log('=== STARTING RECORDING ===');
+      console.log('Current language:', language);
+      console.log('Speech recognition available:', !!recognitionRef.current);
+      
+      // Check if speech recognition is available
+      if (!recognitionRef.current) {
+        throw new Error('Speech recognition not initialized');
+      }
+      
+      // Get audio stream
+      console.log('Requesting microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioStreamRef.current = stream; // Store stream reference for cleanup
+      console.log('Microphone access granted');
+      
+      // Store stream reference for cleanup
+      audioStreamRef.current = stream;
+      
+      // Create media recorder
       mediaRecorderRef.current = new window.MediaRecorder(stream);
       audioChunksRef.current = [];
+      
       mediaRecorderRef.current.ondataavailable = (event) => {
         audioChunksRef.current.push(event.data);
       };
+      
+      // Start media recorder
+      console.log('Starting media recorder...');
       mediaRecorderRef.current.start();
-      manuallyStoppingRef.current = false; // Reset manual stopping flag
+      
+      // Reset manual stopping flag
+      manuallyStoppingRef.current = false;
+      
+      // Update UI states
       setIsRecording(true);
       setRecordingIndicator(true);
-      if (recognitionRef.current) recognitionRef.current.start();
+      
+      // Start speech recognition
+      console.log('Starting speech recognition...');
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+          console.log('Speech recognition started successfully');
+        } catch (recognitionError) {
+          console.error('Error starting speech recognition:', recognitionError);
+          // Continue with recording even if speech recognition fails
+        }
+      }
+      
       setMicStatus({ status: 'available', details: 'Recording in progress' });
+      console.log('Recording started successfully');
+      
     } catch (error) {
-      setMicStatus({ status: 'error', details: error.message });
+      console.error('=== START RECORDING ERROR ===');
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      setMicStatus({ status: 'error', details: `Failed to start recording: ${error.message}` });
+      
+      // Clean up any partial setup
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop());
+        audioStreamRef.current = null;
+      }
+      
+      setIsRecording(false);
+      setRecordingIndicator(false);
     }
   };
 

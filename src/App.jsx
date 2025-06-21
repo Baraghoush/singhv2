@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import VoiceRecorder from './VoiceRecorder';
 import EmailSender from './EmailSender';
+import TranslateBox from './TranslateBox';
 
 function App() {
   // Example condition: change this to your actual logic
@@ -25,6 +26,12 @@ function App() {
           className="bg-green-700 text-white px-4 py-2 rounded shadow hover:bg-green-900"
         >
           Email Sender
+        </Link>
+        <Link
+          to="/translate"
+          className="bg-purple-700 text-white px-4 py-2 rounded shadow hover:bg-purple-900"
+        >
+          Translator
         </Link>
       </div>
 
@@ -119,6 +126,7 @@ function App() {
         <Route path="/" element={<MainPage />} />
         <Route path="/voice-recorder" element={<VoiceRecorder />} />
         <Route path="/email-sender" element={<EmailSender />} />
+        <Route path="/translate" element={<TranslateBox />} />
       </Routes>
     </Router>
   );

@@ -28,6 +28,28 @@ const VoiceRecorder = () => {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [lastOperation, setLastOperation] = useState(''); // 'insert' or 'update'
 
+  // Translation state variables (from TranslateBox)
+  const [translations, setTranslations] = useState({});
+  const [isLoadingTranslations, setIsLoadingTranslations] = useState(false);
+  const [selectedLanguages, setSelectedLanguages] = useState(['es', 'fr', 'de', 'it', 'pt']);
+  const [showTranslationSection, setShowTranslationSection] = useState(false);
+
+  // Language options for translation
+  const languages = {
+    'es': 'Spanish',
+    'fr': 'French', 
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'zh': 'Chinese',
+    'ru': 'Russian',
+    'ar': 'Arabic',
+    'hi': 'Hindi',
+    'pa': 'Punjabi'
+  };
+
   // Refs
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -275,6 +297,68 @@ const VoiceRecorder = () => {
     } catch (error) {
       return text;
     }
+  };
+
+  // Multi-language translation function (from TranslateBox)
+  const translateToMultipleLanguages = async (text, targetLanguages) => {
+    try {
+      const apiKey = config.GOOGLE_TRANSLATE_API_KEY;
+      
+      if (!apiKey) {
+        throw new Error('Google Translate API key not found.');
+      }
+
+      const response = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          q: text,
+          target: targetLanguages[0], // We'll handle multiple languages in a loop
+          source: 'en'
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Translation API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data.data.translations[0].translatedText;
+    } catch (error) {
+      console.error('Translation error:', error);
+      return `Translation failed: ${error.message}`;
+    }
+  };
+
+  // Handle multi-language translation
+  const handleTranslateToMultipleLanguages = async () => {
+    if (!voiceInput.trim()) return;
+    
+    setIsLoadingTranslations(true);
+    const newTranslations = {};
+    
+    for (const lang of selectedLanguages) {
+      try {
+        const translatedText = await translateToMultipleLanguages(voiceInput, [lang]);
+        newTranslations[lang] = translatedText;
+      } catch (error) {
+        newTranslations[lang] = 'Translation failed';
+      }
+    }
+    
+    setTranslations(newTranslations);
+    setIsLoadingTranslations(false);
+  };
+
+  // Toggle language selection for translation
+  const toggleLanguage = (langCode) => {
+    setSelectedLanguages(prev => 
+      prev.includes(langCode) 
+        ? prev.filter(lang => lang !== langCode)
+        : [...prev, langCode]
+    );
   };
 
   // Show translate button if text is entered
@@ -647,6 +731,84 @@ const VoiceRecorder = () => {
             }} disabled={isTranslating}>
               {isTranslating ? 'Translating...' : 'Translate to English'}
             </button>
+          )}
+
+          {/* Multi-Language Translation Section */}
+          {showTranslate && (
+            <div className="mt-6 border-t pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Multi-Language Translation</h3>
+                <button
+                  onClick={() => setShowTranslationSection(!showTranslationSection)}
+                  className="text-blue-600 hover:text-blue-800 text-sm"
+                >
+                  {showTranslationSection ? 'Hide' : 'Show'} Translation Options
+                </button>
+              </div>
+
+              {showTranslationSection && (
+                <>
+                  {/* Language Selection */}
+                  <div className="mb-4">
+                    <h4 className="text-md font-semibold mb-3">Select Languages to Translate To:</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(languages).map(([code, name]) => (
+                        <button
+                          key={code}
+                          onClick={() => toggleLanguage(code)}
+                          className={`px-3 py-1 rounded-full text-sm border ${
+                            selectedLanguages.includes(code)
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Translation Button */}
+                  <div className="mb-4">
+                    <button
+                      onClick={handleTranslateToMultipleLanguages}
+                      disabled={isLoadingTranslations || !voiceInput.trim()}
+                      className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {isLoadingTranslations ? 'Translating...' : `Translate to ${selectedLanguages.length} Languages`}
+                    </button>
+                  </div>
+
+                  {/* Translation Results */}
+                  {Object.keys(translations).length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-md font-semibold">Translation Results:</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {selectedLanguages.map(langCode => (
+                          <div key={langCode} className="bg-gray-50 p-4 rounded-lg">
+                            <div className="flex justify-between items-center mb-2">
+                              <h5 className="font-semibold text-gray-800">
+                                {languages[langCode]}
+                              </h5>
+                              <span className="text-xs text-gray-500 uppercase">{langCode}</span>
+                            </div>
+                            <div className="bg-white p-3 rounded border min-h-[60px]">
+                              {translations[langCode] || 'No translation available'}
+                            </div>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(translations[langCode])}
+                              className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                            >
+                              Copy to clipboard
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
         </div>
       </main>

@@ -61,6 +61,7 @@ const VoiceRecorder = () => {
   const animationFrameRef = useRef(null);
   const recognitionRef = useRef(null);
   const audioStreamRef = useRef(null);
+  const manuallyStoppingRef = useRef(false);
 
   // EmailJS init
   useEffect(() => {
@@ -188,14 +189,18 @@ const VoiceRecorder = () => {
         setMicStatus({ status: 'error', details: `Speech recognition error: ${event.error}` });
       };
       recognition.onend = () => {
+        console.log('Speech recognition ended. isRecording:', isRecording, 'manuallyStopping:', manuallyStoppingRef.current);
         // Only restart if we're still recording and the recognition was not manually stopped
-        if (isRecording) {
+        if (isRecording && !manuallyStoppingRef.current) {
+          console.log('Restarting speech recognition...');
           // Add a small delay to ensure state updates have taken effect
           setTimeout(() => {
-            if (isRecording && recognitionRef.current) {
+            if (isRecording && !manuallyStoppingRef.current && recognitionRef.current) {
               recognitionRef.current.start();
             }
           }, 100);
+        } else {
+          console.log('Not restarting speech recognition - recording stopped or manually stopped');
         }
       };
       recognitionRef.current = recognition;
@@ -252,6 +257,7 @@ const VoiceRecorder = () => {
         audioChunksRef.current.push(event.data);
       };
       mediaRecorderRef.current.start();
+      manuallyStoppingRef.current = false; // Reset manual stopping flag
       setIsRecording(true);
       setRecordingIndicator(true);
       if (recognitionRef.current) recognitionRef.current.start();
@@ -264,6 +270,9 @@ const VoiceRecorder = () => {
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       console.log('=== STOPPING RECORDING ===');
+      
+      // Set manual stopping flag to prevent speech recognition from restarting
+      manuallyStoppingRef.current = true;
       
       // Set recording state to false first to prevent speech recognition from restarting
       setIsRecording(false);
@@ -318,6 +327,9 @@ const VoiceRecorder = () => {
   // Force stop recording (emergency stop)
   const forceStopRecording = () => {
     console.log('=== FORCE STOPPING RECORDING ===');
+    
+    // Set manual stopping flag to prevent speech recognition from restarting
+    manuallyStoppingRef.current = true;
     
     // Set states to false immediately
     setIsRecording(false);
@@ -471,6 +483,9 @@ const VoiceRecorder = () => {
   useEffect(() => {
     return () => {
       console.log('=== COMPONENT CLEANUP ===');
+      
+      // Set manual stopping flag to prevent speech recognition from restarting
+      manuallyStoppingRef.current = true;
       
       // Cancel animation frame
       if (animationFrameRef.current) {

@@ -60,6 +60,7 @@ const VoiceRecorder = () => {
   const microphoneRef = useRef(null);
   const animationFrameRef = useRef(null);
   const recognitionRef = useRef(null);
+  const audioStreamRef = useRef(null);
 
   // EmailJS init
   useEffect(() => {
@@ -244,6 +245,7 @@ const VoiceRecorder = () => {
   const handleStartRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream; // Store stream reference for cleanup
       mediaRecorderRef.current = new window.MediaRecorder(stream);
       audioChunksRef.current = [];
       mediaRecorderRef.current.ondataavailable = (event) => {
@@ -261,33 +263,98 @@ const VoiceRecorder = () => {
 
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      console.log('=== STOPPING RECORDING ===');
+      
       // Set recording state to false first to prevent speech recognition from restarting
       setIsRecording(false);
       setRecordingIndicator(false);
       
       // Stop speech recognition
       if (recognitionRef.current) {
+        console.log('Stopping speech recognition...');
         recognitionRef.current.stop();
       }
       
       // Stop media recorder
-      mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        console.log('Stopping media recorder...');
+        mediaRecorderRef.current.stop();
+      }
       
+      // Set up the onstop handler
       mediaRecorderRef.current.onstop = async () => {
+        console.log('Media recorder stopped, processing audio...');
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        
+        // Stop all tracks in the stream to release microphone
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach(track => {
+            console.log('Stopping track:', track.kind);
+            track.stop();
+          });
+          audioStreamRef.current = null; // Clear the reference
+        }
+        
         // Send email with recording
         if (email) {
           await sendEmailToAndy(voiceInput, email);
         }
+        
         // Show success message if voice input exists
         if (voiceInput && email) {
           setShowSuccessMessage(true);
           // Hide success message after 10 seconds
           setTimeout(() => setShowSuccessMessage(false), 10000);
         }
+        
         setMicStatus({ status: 'available', details: 'Recording completed' });
+        console.log('Recording cleanup completed');
       };
+    } else {
+      console.log('No active recording to stop');
     }
+  };
+
+  // Force stop recording (emergency stop)
+  const forceStopRecording = () => {
+    console.log('=== FORCE STOPPING RECORDING ===');
+    
+    // Set states to false immediately
+    setIsRecording(false);
+    setRecordingIndicator(false);
+    
+    // Stop speech recognition immediately
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.log('Error stopping speech recognition:', error);
+      }
+    }
+    
+    // Stop media recorder immediately
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (error) {
+        console.log('Error stopping media recorder:', error);
+      }
+    }
+    
+    // Stop all audio tracks immediately
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => {
+        try {
+          track.stop();
+        } catch (error) {
+          console.log('Error stopping track:', error);
+        }
+      });
+      audioStreamRef.current = null;
+    }
+    
+    setMicStatus({ status: 'available', details: 'Recording force stopped' });
+    console.log('Force stop completed');
   };
 
   // Email sending logic
@@ -403,11 +470,37 @@ const VoiceRecorder = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      if (audioContextRef.current) audioContextRef.current.close();
+      console.log('=== COMPONENT CLEANUP ===');
+      
+      // Cancel animation frame
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      // Close audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+      
+      // Stop speech recognition
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
+      
+      // Stop media recorder if active
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      
+      // Stop all audio tracks
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => {
+          console.log('Stopping track during cleanup:', track.kind);
+          track.stop();
+        });
+      }
+      
+      console.log('Component cleanup completed');
     };
   }, []);
 
@@ -717,7 +810,7 @@ const VoiceRecorder = () => {
           {/* Recording Controls */}
           <div className="mb-4 flex gap-4">
             <button type="button" onClick={handleStartRecording} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700" disabled={isRecording}>Start Recording</button>
-            <button type="button" onClick={handleStopRecording} className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700" disabled={!isRecording}>Stop Recording</button>
+            <button type="button" onClick={forceStopRecording} className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700" disabled={!isRecording}>Stop Recording</button>
           </div>
 
           {/* Recording Indicator */}

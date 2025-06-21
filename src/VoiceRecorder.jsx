@@ -21,6 +21,7 @@ const VoiceRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingIndicator, setRecordingIndicator] = useState(false);
   const [voiceInput, setVoiceInput] = useState('');
+  const [englishTranslation, setEnglishTranslation] = useState('');
   const [permissionStatus, setPermissionStatus] = useState('');
   const [showTranslate, setShowTranslate] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -150,11 +151,17 @@ const VoiceRecorder = () => {
         console.log('Current email:', email);
         
         let finalInput = transcript;
+        let translatedText = '';
+        
         if (language !== 'en-US') {
           console.log('Translating from', language, 'to English...');
-          const translatedText = await translateText(transcript);
-          finalInput = `${transcript}\n\nTranslated to English:\n${translatedText}`;
-          console.log('Translated input:', finalInput);
+          translatedText = await translateText(transcript);
+          finalInput = transcript; // Keep original transcript in voiceInput
+          setEnglishTranslation(translatedText); // Store translation separately
+          console.log('Original input:', finalInput);
+          console.log('English translation:', translatedText);
+        } else {
+          setEnglishTranslation(''); // Clear translation if language is English
         }
         
         setVoiceInput(finalInput);
@@ -163,7 +170,7 @@ const VoiceRecorder = () => {
         // Save to Supabase when transcribed and email is present
         if (email) {
           console.log('Email present, attempting to save to Supabase...');
-          const result = await saveVoiceInputToSupabase(email, finalInput);
+          const result = await saveVoiceInputToSupabase(email, finalInput, translatedText);
           if (result) {
             console.log('Save successful, showing success message');
             setShowSuccessMessage(true);
@@ -270,11 +277,18 @@ const VoiceRecorder = () => {
   // Email sending logic
   const sendEmailToAndy = async (voiceInput, email) => {
     try {
+      let emailContent = voiceInput;
+      
+      // Include English translation if available
+      if (englishTranslation && englishTranslation.trim()) {
+        emailContent = `Original Input:\n${voiceInput}\n\nEnglish Translation:\n${englishTranslation}`;
+      }
+      
       const templateParams = {
         to_email: 'andybaronca@gmail.com',
         from_name: 'Family Law Assistant',
         question: `Voice Recording from ${email}`,
-        answer: voiceInput,
+        answer: emailContent,
         timestamp: new Date().toLocaleString(),
       };
       await emailjs.send('service_v3epzv2', 'template_fuz4031', templateParams);
@@ -340,9 +354,12 @@ const VoiceRecorder = () => {
     setIsLoadingTranslations(true);
     const newTranslations = {};
     
+    // Use English translation if available, otherwise use original voice input
+    const sourceText = englishTranslation && englishTranslation.trim() ? englishTranslation : voiceInput;
+    
     for (const lang of selectedLanguages) {
       try {
-        const translatedText = await translateToMultipleLanguages(voiceInput, [lang]);
+        const translatedText = await translateToMultipleLanguages(sourceText, [lang]);
         newTranslations[lang] = translatedText;
       } catch (error) {
         newTranslations[lang] = 'Translation failed';
@@ -376,12 +393,14 @@ const VoiceRecorder = () => {
   }, []);
 
   // Add this helper function inside the component
-  const saveVoiceInputToSupabase = async (email, voiceInput) => {
+  const saveVoiceInputToSupabase = async (email, voiceInput, englishTranslation) => {
     try {
       console.log('=== SAVE VOICE INPUT TO SUPABASE ===');
       console.log('Email:', email);
       console.log('VoiceInput length:', voiceInput ? voiceInput.length : 0);
       console.log('VoiceInput preview:', voiceInput ? voiceInput.substring(0, 100) + '...' : 'null');
+      console.log('EnglishTranslation length:', englishTranslation ? englishTranslation.length : 0);
+      console.log('EnglishTranslation preview:', englishTranslation ? englishTranslation.substring(0, 100) + '...' : 'null');
       
       if (!email || !voiceInput) {
         console.error('Missing required data: email or voiceInput');
@@ -401,6 +420,7 @@ const VoiceRecorder = () => {
       const insertData = { 
         email: email.trim(), 
         voiceInput: voiceInput.trim(),
+        englishTranslation: englishTranslation ? englishTranslation.trim() : null,
         created_at: new Date().toISOString()
       };
       
@@ -409,7 +429,7 @@ const VoiceRecorder = () => {
       // First, check if a record with this email already exists
       const { data: existingRecord, error: checkError } = await supabase
         .from('contacts')
-        .select('id, email, voiceInput, created_at')
+        .select('id, email, voiceInput, englishTranslation, created_at')
         .eq('email', email.trim())
         .single();
 
@@ -426,10 +446,11 @@ const VoiceRecorder = () => {
           .from('contacts')
           .update({ 
             voiceInput: voiceInput.trim(),
+            englishTranslation: englishTranslation ? englishTranslation.trim() : null,
             created_at: new Date().toISOString()
           })
           .eq('id', existingRecord.id)
-          .select('id, email, voiceInput, created_at')
+          .select('id, email, voiceInput, englishTranslation, created_at')
           .single();
 
         if (error) {
@@ -452,7 +473,7 @@ const VoiceRecorder = () => {
         const { data, error } = await supabase
           .from('contacts')
           .insert([insertData])
-          .select('id, email, voiceInput, created_at')
+          .select('id, email, voiceInput, englishTranslation, created_at')
           .single();
 
         if (error) {
@@ -501,7 +522,7 @@ const VoiceRecorder = () => {
       
       const { data, error } = await supabase
         .from('contacts')
-        .select('id, email, voiceInput, created_at')
+        .select('id, email, voiceInput, englishTranslation, created_at')
         .eq('id', recordId)
         .single();
       
@@ -532,7 +553,7 @@ const VoiceRecorder = () => {
       
       const { data, error } = await supabase
         .from('contacts')
-        .select('id, email, voiceInput, created_at')
+        .select('id, email, voiceInput, englishTranslation, created_at')
         .eq('email', email)
         .order('created_at', { ascending: false });
       
@@ -692,6 +713,25 @@ const VoiceRecorder = () => {
           <div className="mb-2 text-sm text-gray-500">{permissionStatus}</div>
           <textarea id="voiceInput" name="voiceInput" className="w-full border rounded p-2" rows={4} placeholder="Your speech will appear here..." value={voiceInput} onChange={e => setVoiceInput(e.target.value)}></textarea>
 
+          {/* English Translation Text Box */}
+          {language !== 'en-US' && (
+            <div className="mt-4">
+              <label htmlFor="englishTranslation" className="block text-sm font-medium text-gray-700 mb-2">
+                English Translation:
+              </label>
+              <textarea 
+                id="englishTranslation" 
+                name="englishTranslation" 
+                className="w-full border rounded p-2 bg-gray-50" 
+                rows={4} 
+                placeholder="English translation will appear here..." 
+                value={englishTranslation} 
+                onChange={e => setEnglishTranslation(e.target.value)}
+                readOnly={language !== 'en-US'}
+              ></textarea>
+            </div>
+          )}
+
           {/* Success Message */}
           {showSuccessMessage && (
             <div className="mt-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg">
@@ -701,7 +741,10 @@ const VoiceRecorder = () => {
                   <p className="font-semibold">Thank you for your request.</p>
                   <p>Your voice input has been saved to the database.</p>
                   <p className="text-sm mt-1">Email: {email}</p>
-                  <p className="text-sm">Input length: {voiceInput.length} characters</p>
+                  <p>Input length: {voiceInput.length} characters</p>
+                  {englishTranslation && (
+                    <p className="text-sm">English translation length: {englishTranslation.length} characters</p>
+                  )}
                   <p>You will receive a reply within 12 hours.</p>
                   <p className="text-sm mt-1">Last operation: {lastOperation}</p>
                   <button
@@ -727,7 +770,7 @@ const VoiceRecorder = () => {
             <button type="button" className="translate-button mt-4" onClick={async () => {
               setIsTranslating(true);
               const translatedText = await translateText(voiceInput);
-              setVoiceInput(`${voiceInput}\n\nTranslated to English:\n${translatedText}`);
+              setEnglishTranslation(translatedText);
               setIsTranslating(false);
             }} disabled={isTranslating}>
               {isTranslating ? 'Translating...' : 'Translate to English'}

@@ -187,7 +187,15 @@ const VoiceRecorder = () => {
         setMicStatus({ status: 'error', details: `Speech recognition error: ${event.error}` });
       };
       recognition.onend = () => {
-        if (isRecording) recognition.start();
+        // Only restart if we're still recording and the recognition was not manually stopped
+        if (isRecording) {
+          // Add a small delay to ensure state updates have taken effect
+          setTimeout(() => {
+            if (isRecording && recognitionRef.current) {
+              recognitionRef.current.start();
+            }
+          }, 100);
+        }
       };
       recognitionRef.current = recognition;
     } else {
@@ -253,10 +261,18 @@ const VoiceRecorder = () => {
 
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      // Set recording state to false first to prevent speech recognition from restarting
       setIsRecording(false);
       setRecordingIndicator(false);
-      if (recognitionRef.current) recognitionRef.current.stop();
+      
+      // Stop speech recognition
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      
+      // Stop media recorder
+      mediaRecorderRef.current.stop();
+      
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         // Send email with recording
@@ -389,6 +405,9 @@ const VoiceRecorder = () => {
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (audioContextRef.current) audioContextRef.current.close();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
     };
   }, []);
 
